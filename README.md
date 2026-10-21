@@ -41,8 +41,8 @@ Overcomes the tedious day-by-day mobile app editing with tactile drag-and-drop b
 graph TD
     A[Web Browser / Dashboard] <-->|HTTP / REST JSON| B[FastAPI Backend]
     B <-->|Persistent Async MQTT| C[Meross EU Cloud Broker]
-    C <-->|Low-Level Appliance.Control.Thermostat| D[mts200b: Living Room Thermostat]
-    C <-->|Low-Level Appliance.Control.Thermostat| E[mts205b: Bedroom Thermostat]
+    C <-->|Low-Level Appliance.Control.Thermostat| D[mts200b: Thermostat 1]
+    C <-->|Low-Level Appliance.Control.Thermostat| E[mts205b: Thermostat 2]
 ```
 
 ---

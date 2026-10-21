@@ -38,9 +38,23 @@
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    
+    /* Disable user selection while dragging */
+    .dragging-active {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      cursor: ns-resize !important;
+    }
+    .resizing-active {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      cursor: ew-resize !important;
+    }
   </style>
 </head>
-<body class="min-h-full flex flex-col font-sans selection:bg-teal-500 selection:text-white pb-28" x-data="schedulerApp()" x-init="init()" x-cloak>
+<body class="min-h-full flex flex-col font-sans selection:bg-teal-500 selection:text-white pb-28" 
+      :class="{'dragging-active': activeDrag !== null, 'resizing-active': activeResize !== null}"
+      x-data="schedulerApp()" x-init="init()" x-cloak>
 
   <!-- Top Header Navigation -->
   <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30 shadow-md">
@@ -54,9 +68,9 @@
         <div>
           <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
             Meross Scheduler
-            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20">MTS200 &amp; MTS205</span>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20">Interactive Bar Editor</span>
           </h1>
-          <p class="text-xs text-slate-400">Smart Weekly Multi-Thermostat Scheduler</p>
+          <p class="text-xs text-slate-400">Tactile Click &amp; Drag Visual Schedule Management</p>
         </div>
       </div>
 
@@ -279,36 +293,50 @@
       </div>
     </template>
 
-    <!-- Schedule Editor Section -->
+    <!-- Interactive Bar Schedule Editor Section -->
     <div x-show="selectedDevice" class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur space-y-6">
       
-      <!-- Section Header & Legend -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <!-- Section Header & Gestures Guide -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <span>Schedule Editor</span>
-            <span class="text-xs font-normal text-slate-400" x-text="'(' + (selectedDevice ? selectedDevice.name : '') + ')'"></span>
+          <div class="flex items-center gap-2">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span>Interactive Bar Schedule Editor</span>
+              <span class="text-xs font-normal text-slate-400" x-text="'(' + (selectedDevice ? selectedDevice.name : '') + ')'"></span>
+            </h3>
             <template x-if="hasUnsavedChanges">
               <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 Unsaved Changes
               </span>
             </template>
-          </h3>
-          <p class="text-xs text-slate-400 mt-0.5">Click + / - to adjust temperatures, split slots, or copy daily patterns in one click.</p>
+          </div>
+          <!-- Tactile Gestures Tip -->
+          <div class="flex flex-wrap items-center gap-4 text-xs text-slate-400 mt-1.5">
+            <span class="flex items-center gap-1.5">
+              <span class="text-teal-400 font-bold">↕ Drag Bar Vertically:</span> Adjust Temperature
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="text-teal-400 font-bold">↔ Drag Dividers:</span> Move Time Boundaries (15m snap)
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="text-teal-400 font-bold">+ Split:</span> Divide Longest Interval
+            </span>
+          </div>
         </div>
         
-        <div class="flex items-center gap-4 text-xs text-slate-400">
+        <!-- Color Legend -->
+        <div class="flex items-center gap-3 text-xs text-slate-400 shrink-0">
           <div class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded bg-blue-600/70"></span>
-            <span>&lt; 18°C (Eco)</span>
+            <span class="w-3 h-3 rounded bg-blue-600/80"></span>
+            <span>&lt; 18°C</span>
           </div>
           <div class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded bg-emerald-600/70"></span>
-            <span>18 - 20°C (Comfort)</span>
+            <span class="w-3 h-3 rounded bg-emerald-600/80"></span>
+            <span>18 - 20°C</span>
           </div>
           <div class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded bg-amber-600/70"></span>
-            <span>&gt; 20°C (Heating)</span>
+            <span class="w-3 h-3 rounded bg-amber-600/80"></span>
+            <span>&gt; 20°C</span>
           </div>
         </div>
       </div>
@@ -321,19 +349,19 @@
         <p class="text-sm text-slate-400">Fetching live schedule from thermostat over MQTT...</p>
       </div>
 
-      <!-- 7 Days Grid with Editor & Bulk Actions -->
+      <!-- 7 Days Interactive Equalizer / Bar Grid -->
       <div x-show="!loadingSchedule && currentSchedule" class="space-y-6">
         <template x-for="dayKey in daysOfWeek" :key="dayKey">
           <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 transition hover:border-slate-700/80 space-y-3">
             
-            <!-- Day Top Bar & Bulk Copy Actions -->
+            <!-- Day Top Bar & Bulk Actions -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div class="flex items-center gap-3">
                 <span class="text-sm font-bold uppercase tracking-wider text-teal-400 w-28" x-text="dayLabels[dayKey]"></span>
                 <span class="text-xs text-slate-500 font-mono" x-text="(currentSchedule[dayKey] ? currentSchedule[dayKey].length : 0) + ' / 8 slots'"></span>
               </div>
 
-              <!-- Day Quick Copy Buttons -->
+              <!-- Quick Bulk Action Buttons -->
               <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
                 <button 
                   @click="copyDayToAll(dayKey)"
@@ -361,92 +389,95 @@
                   <button 
                     @click="splitLongestSlot(dayKey)"
                     class="px-2 py-1 rounded-md bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-800/80 transition flex items-center gap-1"
-                    title="Split the longest slot into two intervals">
-                    <span>+ Add Slot</span>
+                    title="Split the longest interval into two slots">
+                    <span>+ Split Slot</span>
                   </button>
                 </template>
               </div>
             </div>
 
-            <!-- Visual 24h Timeline Bar -->
-            <div class="h-6 w-full bg-slate-900 rounded-lg overflow-hidden flex border border-slate-800 shadow-inner">
-              <template x-for="(slot, sIndex) in (currentSchedule[dayKey] || [])" :key="sIndex">
-                <div 
-                  class="h-full relative group transition-all flex items-center justify-center text-[11px] font-semibold text-white px-1 select-none border-r border-slate-950/40 last:border-r-0"
-                  :style="'width: ' + ((slotDuration(slot) / 1440) * 100) + '%;'"
-                  :class="getTempBadgeClass(slot.temp)">
-                  
-                  <span class="truncate" x-text="slot.temp + '°'"></span>
+            <!-- TALL INTERACTIVE BAR EQUALIZER -->
+            <div class="relative">
+              
+              <!-- 24h Time Grid Scale (00:00, 06:00, 12:00, 18:00, 24:00) -->
+              <div class="flex justify-between text-[10px] text-slate-500 font-mono pb-1 select-none">
+                <span>00:00</span>
+                <span>06:00</span>
+                <span>12:00</span>
+                <span>18:00</span>
+                <span>24:00</span>
+              </div>
 
-                  <!-- Hover Tooltip -->
-                  <div class="absolute bottom-full mb-1 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
-                    <div class="bg-slate-800 text-slate-100 text-[10px] font-mono px-2 py-1 rounded shadow-xl border border-slate-700 whitespace-nowrap">
-                      <span x-text="slot.start_time + ' - ' + slot.end_time + ' (' + slotDuration(slot) + 'm): ' + slot.temp + '°C'"></span>
-                    </div>
+              <!-- Main Equalizer Canvas Box (Height 130px) -->
+              <div class="h-32 w-full bg-slate-900/90 rounded-xl border border-slate-800 flex relative overflow-hidden shadow-inner select-none"
+                   :id="'canvas-' + dayKey">
+                
+                <!-- Background Horizontal Temp Guidelines (15°C, 20°C, 25°C) -->
+                <div class="absolute inset-0 pointer-events-none flex flex-col justify-between py-2 px-3 z-0 opacity-20">
+                  <div class="border-b border-dashed border-slate-400 w-full flex justify-end">
+                    <span class="text-[9px] text-slate-400 font-mono pr-1">25°C</span>
+                  </div>
+                  <div class="border-b border-dashed border-slate-400 w-full flex justify-end">
+                    <span class="text-[9px] text-slate-400 font-mono pr-1">20°C</span>
+                  </div>
+                  <div class="border-b border-dashed border-slate-400 w-full flex justify-end">
+                    <span class="text-[9px] text-slate-400 font-mono pr-1">15°C</span>
                   </div>
                 </div>
-              </template>
-            </div>
 
-            <!-- Editable Slot Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 pt-2">
-              <template x-for="(slot, sIndex) in (currentSchedule[dayKey] || [])" :key="sIndex">
-                <div class="rounded-xl p-3 bg-slate-900 border border-slate-800 flex flex-col justify-between space-y-2 relative group hover:border-slate-700">
-                  
-                  <!-- Time range header -->
-                  <div class="flex items-center justify-between text-xs font-mono text-slate-400">
-                    <div class="flex items-center gap-1 font-semibold text-slate-200">
-                      <span x-text="slot.start_time"></span>
-                      <span>&rarr;</span>
-                      <!-- If not last slot, editable boundary end time -->
-                      <template x-if="sIndex < currentSchedule[dayKey].length - 1">
-                        <select 
-                          @change="updateSlotBoundary(dayKey, sIndex, $event.target.value)"
-                          class="bg-slate-800 text-teal-400 font-bold px-1.5 py-0.5 rounded border border-slate-700 hover:border-teal-500 cursor-pointer focus:outline-none">
-                          <template x-for="timeOption in getValidBoundaryTimes(dayKey, sIndex)" :key="timeOption">
-                            <option :value="timeOption" :selected="timeOption === slot.end_time" x-text="timeOption"></option>
-                          </template>
-                        </select>
-                      </template>
-                      <template x-if="sIndex === currentSchedule[dayKey].length - 1">
-                        <span x-text="slot.end_time"></span>
+                <!-- Slot Columns -->
+                <template x-for="(slot, sIndex) in (currentSchedule[dayKey] || [])" :key="sIndex">
+                  <div 
+                    class="h-full relative flex flex-col justify-end group transition-all"
+                    :style="'width: ' + ((slotDuration(slot) / 1440) * 100) + '%;'">
+
+                    <!-- THE TEMPERATURE BAR (Draggable vertically) -->
+                    <div 
+                      @mousedown="startTempDrag(dayKey, sIndex, $event)"
+                      class="w-full relative transition-all rounded-t-lg shadow-md cursor-ns-resize flex flex-col items-center justify-between p-1.5 overflow-hidden group-hover:brightness-110"
+                      :style="'height: ' + getTempHeightPercent(slot.temp) + '%;'"
+                      :class="getBarGradientClass(slot.temp)">
+                      
+                      <!-- Top Drag Indicator Grip -->
+                      <div class="w-6 h-1 rounded-full bg-white/40 my-0.5 group-hover:bg-white/70 transition"></div>
+
+                      <!-- Large Centered Temperature Label -->
+                      <div class="flex flex-col items-center my-auto">
+                        <span class="text-sm sm:text-base font-extrabold tracking-tight text-white drop-shadow font-mono" x-text="slot.temp.toFixed(1) + '°'"></span>
+                        <span class="text-[10px] font-mono text-white/80 tracking-tighter truncate max-w-full" x-text="slot.start_time + '-' + slot.end_time"></span>
+                      </div>
+
+                      <!-- Bottom Duration Indicator -->
+                      <span class="text-[9px] font-mono text-white/70 block" x-text="slotDuration(slot) + 'm'"></span>
+
+                      <!-- Hover Action: Delete/Merge Button (if > 1 slot) -->
+                      <template x-if="currentSchedule[dayKey].length > 1">
+                        <button 
+                          @click.stop="mergeSlotWithNext(dayKey, sIndex)"
+                          type="button"
+                          class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition p-1 rounded bg-black/40 hover:bg-red-600 text-white"
+                          title="Delete slot (merge with neighbor)">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                          </svg>
+                        </button>
                       </template>
                     </div>
 
-                    <!-- Merge/Delete slot button (if more than 1 slot) -->
-                    <template x-if="currentSchedule[dayKey].length > 1">
-                      <button 
-                        @click="mergeSlotWithNext(dayKey, sIndex)"
-                        class="text-slate-500 hover:text-red-400 transition"
-                        title="Delete slot (merges with neighbor)">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                        </svg>
-                      </button>
+                    <!-- VERTICAL DIVIDER / TIME BOUNDARY RESIZE HANDLE (if not last slot) -->
+                    <template x-if="sIndex < currentSchedule[dayKey].length - 1">
+                      <div 
+                        @mousedown.stop="startBoundaryResize(dayKey, sIndex, $event)"
+                        class="absolute right-0 top-0 bottom-0 w-3 -mr-1.5 z-20 cursor-ew-resize flex items-center justify-center group/handle hover:scale-110 transition"
+                        title="Drag left/right to adjust time boundary">
+                        <div class="w-1 h-12 rounded-full bg-slate-600 group-hover/handle:bg-teal-400 shadow-lg border border-slate-900 group-hover/handle:h-full transition-all"></div>
+                      </div>
                     </template>
+
                   </div>
+                </template>
 
-                  <!-- Temperature Stepper Controls -->
-                  <div class="flex items-center justify-between pt-1">
-                    <div class="flex items-center space-x-1.5">
-                      <button 
-                        @click="adjustSlotTemp(dayKey, sIndex, -0.5)"
-                        class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-sm transition active:scale-95">
-                        -
-                      </button>
-                      <span class="text-base font-extrabold w-14 text-center font-mono" :class="getTempTextClass(slot.temp)" x-text="slot.temp.toFixed(1) + '°'"></span>
-                      <button 
-                        @click="adjustSlotTemp(dayKey, sIndex, +0.5)"
-                        class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-sm transition active:scale-95">
-                        +
-                      </button>
-                    </div>
-
-                    <span class="text-[11px] text-slate-500 font-mono" x-text="slotDuration(slot) + ' min'"></span>
-                  </div>
-
-                </div>
-              </template>
+              </div>
             </div>
 
           </div>
@@ -488,6 +519,14 @@
     </div>
 
   </main>
+
+  <!-- Floating Dragging Badge / Tooltip -->
+  <div x-show="activeDrag !== null" 
+       class="fixed z-50 pointer-events-none px-3 py-1.5 rounded-xl bg-slate-900 border border-teal-500/80 text-white font-mono shadow-2xl flex items-center gap-2 transform -translate-x-1/2 -translate-y-12"
+       :style="'left: ' + dragBadgeX + 'px; top: ' + dragBadgeY + 'px;'">
+    <span class="text-xs text-teal-400 font-bold">Temp:</span>
+    <span class="text-sm font-extrabold" x-text="activeDrag ? activeDrag.temp.toFixed(1) + '°C' : ''"></span>
+  </div>
 
   <!-- Sticky Bottom Save Bar (Visible when changes exist) -->
   <div x-show="hasUnsavedChanges"
@@ -545,6 +584,7 @@
         isSaving: false,
         toastMessage: '',
         toastType: 'success',
+        isUpdatingMode: false,
         daysOfWeek: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
         dayLabels: {
           mon: 'Monday',
@@ -555,6 +595,12 @@
           sat: 'Saturday',
           sun: 'Sunday'
         },
+
+        // Dragging & Resizing States
+        activeDrag: null,        // { dayKey, sIndex, startY, startTemp, temp }
+        activeResize: null,      // { dayKey, sIndex, startX, prevStartM, nextEndM, containerWidth, containerLeft }
+        dragBadgeX: 0,
+        dragBadgeY: 0,
 
         get otherDevice() {
           if (!this.selectedUuid || this.devices.length < 2) return null;
@@ -578,6 +624,103 @@
 
         async init() {
           await this.fetchDevices();
+          this.setupGlobalDragListeners();
+        },
+
+        setupGlobalDragListeners() {
+          window.addEventListener('mousemove', (e) => {
+            // Handle vertical temperature dragging
+            if (this.activeDrag) {
+              const deltaY = this.activeDrag.startY - e.clientY;
+              // 7 pixels per 0.5°C step
+              const steps = Math.round(deltaY / 7);
+              let newTemp = Math.round((this.activeDrag.startTemp + (steps * 0.5)) * 10) / 10;
+              if (newTemp < 5.0) newTemp = 5.0;
+              if (newTemp > 35.0) newTemp = 35.0;
+
+              const slot = this.currentSchedule[this.activeDrag.dayKey][this.activeDrag.sIndex];
+              slot.temp = newTemp;
+              this.activeDrag.temp = newTemp;
+              this.dragBadgeX = e.clientX;
+              this.dragBadgeY = e.clientY;
+              this.updateRawJsonPreview();
+            }
+
+            // Handle horizontal boundary time resizing
+            if (this.activeResize) {
+              const { dayKey, sIndex, prevStartM, nextEndM, containerWidth, containerLeft } = this.activeResize;
+              const relativeX = (e.clientX - containerLeft) / containerWidth;
+              let targetM = Math.round((relativeX * 1440) / 15) * 15;
+              if (targetM < prevStartM + 15) targetM = prevStartM + 15;
+              if (targetM > nextEndM - 15) targetM = nextEndM - 15;
+
+              const newTime = this.minutesToTime(targetM);
+              const slots = this.currentSchedule[dayKey];
+              slots[sIndex].end_time = newTime;
+              slots[sIndex + 1].start_time = newTime;
+              this.updateRawJsonPreview();
+            }
+          });
+
+          window.addEventListener('mouseup', () => {
+            if (this.activeDrag) {
+              this.activeDrag = null;
+            }
+            if (this.activeResize) {
+              this.activeResize = null;
+            }
+          });
+        },
+
+        startTempDrag(dayKey, sIndex, event) {
+          event.preventDefault();
+          const slot = this.currentSchedule[dayKey][sIndex];
+          this.activeDrag = {
+            dayKey,
+            sIndex,
+            startY: event.clientY,
+            startTemp: slot.temp,
+            temp: slot.temp
+          };
+          this.dragBadgeX = event.clientX;
+          this.dragBadgeY = event.clientY;
+        },
+
+        startBoundaryResize(dayKey, sIndex, event) {
+          event.preventDefault();
+          const canvas = document.getElementById('canvas-' + dayKey);
+          if (!canvas) return;
+          const rect = canvas.getBoundingClientRect();
+          const slots = this.currentSchedule[dayKey];
+
+          this.activeResize = {
+            dayKey,
+            sIndex,
+            startX: event.clientX,
+            prevStartM: this.timeToMinutes(slots[sIndex].start_time),
+            nextEndM: this.timeToMinutes(slots[sIndex + 1].end_time),
+            containerWidth: rect.width,
+            containerLeft: rect.left
+          };
+        },
+
+        // Map temperature to percentage height (5°C = 30%, 30°C = 100%)
+        getTempHeightPercent(temp) {
+          const minT = 5.0;
+          const maxT = 28.0;
+          const clamped = Math.max(minT, Math.min(maxT, temp));
+          const pct = 35 + ((clamped - minT) / (maxT - minT)) * 65;
+          return Math.round(pct);
+        },
+
+        getBarGradientClass(temp) {
+          if (temp < 18.0) {
+            return 'bg-gradient-to-t from-blue-700 via-blue-600 to-cyan-500 border-t-2 border-cyan-300';
+          }
+          if (temp <= 20.0) {
+            return 'bg-gradient-to-t from-emerald-700 via-emerald-600 to-teal-400 border-t-2 border-teal-300';
+          }
+          return 'bg-gradient-to-t from-amber-700 via-orange-600 to-amber-400 border-t-2 border-amber-300';
         },
 
         async fetchDevices(keepSelection = false) {
@@ -682,8 +825,6 @@
         },
 
         // Mode switching & Manual Target Control
-        isUpdatingMode: false,
-
         async setDeviceMode(uuid, mode) {
           const dev = this.devices.find(d => d.uuid === uuid);
           const modeName = (mode === 3 ? 'Schedule (Auto)' : 'Manual');
@@ -760,43 +901,11 @@
           }
         },
 
-        // Temperature stepping
-        adjustSlotTemp(dayKey, slotIndex, delta) {
-          const slot = this.currentSchedule[dayKey][slotIndex];
-          let newTemp = Math.round((slot.temp + delta) * 10) / 10;
-          if (newTemp < 5.0) newTemp = 5.0;
-          if (newTemp > 35.0) newTemp = 35.0;
-          slot.temp = newTemp;
-          this.updateRawJsonPreview();
-        },
-
-        // Boundary adjustment
-        getValidBoundaryTimes(dayKey, slotIndex) {
-          const slots = this.currentSchedule[dayKey];
-          const prevStartM = this.timeToMinutes(slots[slotIndex].start_time);
-          const nextEndM = this.timeToMinutes(slots[slotIndex + 1].end_time);
-
-          const options = [];
-          // Stepping in 15 minute increments
-          for (let m = prevStartM + 15; m <= nextEndM - 15; m += 15) {
-            options.push(this.minutesToTime(m));
-          }
-          return options;
-        },
-
-        updateSlotBoundary(dayKey, slotIndex, newEndTime) {
-          const slots = this.currentSchedule[dayKey];
-          slots[slotIndex].end_time = newEndTime;
-          slots[slotIndex + 1].start_time = newEndTime;
-          this.updateRawJsonPreview();
-        },
-
         // Slot splitting
         splitLongestSlot(dayKey) {
           const slots = this.currentSchedule[dayKey];
           if (slots.length >= 8) return;
 
-          // Find slot with longest duration
           let longestIdx = 0;
           let maxDur = 0;
           slots.forEach((s, i) => {
@@ -815,7 +924,6 @@
           const target = slots[longestIdx];
           const startM = this.timeToMinutes(target.start_time);
           const dur = this.slotDuration(target);
-          // Midpoint rounded to nearest 15 mins
           const halfM = Math.round((dur / 2) / 15) * 15;
           const midM = startM + halfM;
           const midTime = this.minutesToTime(midM);
@@ -839,11 +947,9 @@
           if (slots.length <= 1) return;
 
           if (slotIndex < slots.length - 1) {
-            // Merge with next slot: expand current slot to next slot's end time and remove next
             slots[slotIndex].end_time = slots[slotIndex + 1].end_time;
             slots.splice(slotIndex + 1, 1);
           } else {
-            // Last slot: expand previous slot to 24:00 and remove last
             slots[slotIndex - 1].end_time = '24:00';
             slots.splice(slotIndex, 1);
           }
@@ -896,18 +1002,6 @@
 
         slotDuration(slot) {
           return this.timeToMinutes(slot.end_time) - this.timeToMinutes(slot.start_time);
-        },
-
-        getTempBadgeClass(temp) {
-          if (temp < 18.0) return 'bg-blue-600/80 hover:bg-blue-500';
-          if (temp <= 20.0) return 'bg-emerald-600/80 hover:bg-emerald-500';
-          return 'bg-amber-600/80 hover:bg-amber-500';
-        },
-
-        getTempTextClass(temp) {
-          if (temp < 18.0) return 'text-blue-400';
-          if (temp <= 20.0) return 'text-emerald-400';
-          return 'text-amber-400';
         },
 
         copyJson() {

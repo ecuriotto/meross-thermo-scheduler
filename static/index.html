@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meross Thermostat Smart Scheduler</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdfa',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="min-h-full flex flex-col font-sans selection:bg-teal-500 selection:text-white pb-28" x-data="schedulerApp()" x-init="init()" x-cloak>
+
+  <!-- Top Header Navigation -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-teal-500/20">
+          <svg class="w-6 h-6 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            Meross Scheduler
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20">MTS200 &amp; MTS205</span>
+          </h1>
+          <p class="text-xs text-slate-400">Smart Weekly Multi-Thermostat Scheduler</p>
+        </div>
+      </div>
+
+      <!-- Header Controls -->
+      <div class="flex items-center space-x-3">
+        <button 
+          @click="fetchDevices(true)" 
+          :disabled="loading"
+          class="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition shadow-sm hover:border-slate-600 disabled:opacity-50">
+          <svg class="w-3.5 h-3.5" :class="{'animate-spin': loading}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span x-text="loading ? 'Refreshing...' : 'Refresh Devices'"></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Flash Toast / Notification -->
+  <div x-show="toastMessage" 
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 transform -translate-y-2"
+       x-transition:enter-end="opacity-100 transform translate-y-0"
+       x-transition:leave="transition ease-in duration-200"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 w-full">
+    <div class="rounded-xl p-4 text-sm flex items-center justify-between shadow-xl backdrop-blur border"
+         :class="toastType === 'success' 
+            ? 'bg-emerald-950/80 border-emerald-700 text-emerald-200' 
+            : 'bg-red-950/80 border-red-700 text-red-200'">
+      <div class="flex items-center gap-3">
+        <template x-if="toastType === 'success'">
+          <svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+        </template>
+        <template x-if="toastType !== 'success'">
+          <svg class="w-5 h-5 text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </template>
+        <span x-text="toastMessage" class="font-medium"></span>
+      </div>
+      <button @click="toastMessage = ''" class="hover:opacity-75 font-bold ml-4">&times;</button>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+    <!-- Thermostat Selector Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <template x-for="dev in devices" :key="dev.uuid">
+        <div 
+          @click="selectDevice(dev.uuid)"
+          class="relative cursor-pointer rounded-2xl p-5 border transition duration-200 select-none shadow-md overflow-hidden"
+          :class="selectedUuid === dev.uuid 
+            ? 'bg-slate-900 border-teal-500 shadow-teal-500/10 ring-1 ring-teal-500' 
+            : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900/90'">
+          
+          <div class="flex items-start justify-between">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <h2 class="text-base font-semibold text-white" x-text="dev.name"></h2>
+                <span class="text-xs uppercase tracking-wider px-2 py-0.5 rounded font-mono bg-slate-800 text-slate-300 border border-slate-700" x-text="dev.model"></span>
+              </div>
+              <p class="text-xs text-slate-500 font-mono" x-text="dev.uuid"></p>
+            </div>
+            
+            <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                 :class="dev.online ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'">
+              <span class="w-1.5 h-1.5 rounded-full" :class="dev.online ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'"></span>
+              <span x-text="dev.online ? 'Online' : 'Offline'"></span>
+            </div>
+          </div>
+
+          <!-- Control Mode Switcher -->
+          <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between" @click.stop>
+            <span class="text-xs text-slate-400 font-medium">Control Mode:</span>
+            <div class="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-xs">
+              <button 
+                type="button"
+                @click.stop="setDeviceMode(dev.uuid, 3)"
+                :disabled="isUpdatingMode"
+                class="px-2.5 py-1 rounded-md font-semibold transition flex items-center gap-1.5"
+                :class="dev.mode === 3 ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Schedule</span>
+              </button>
+              <button 
+                type="button"
+                @click.stop="setDeviceMode(dev.uuid, 4)"
+                :disabled="isUpdatingMode"
+                class="px-2.5 py-1 rounded-md font-semibold transition flex items-center gap-1.5"
+                :class="dev.mode === 4 ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                </svg>
+                <span>Manual</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Temperatures & Heating State -->
+          <div class="mt-3 grid grid-cols-3 gap-2 text-center" @click.stop>
+            <!-- Ambient -->
+            <div class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/50 flex flex-col justify-center">
+              <span class="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Ambient</span>
+              <span class="text-lg font-bold text-slate-100" x-text="dev.current_temp !== null ? dev.current_temp + '°C' : '--'"></span>
+            </div>
+
+            <!-- Target Box -->
+            <div 
+              class="rounded-xl p-2 border transition relative flex flex-col justify-between"
+              :class="dev.mode === 4 
+                ? 'bg-amber-950/30 border-amber-500/50 shadow-sm shadow-amber-500/10' 
+                : 'bg-slate-950/40 border-slate-800/50'">
+              
+              <div class="flex items-center justify-between px-0.5">
+                <span class="text-[10px] uppercase tracking-wider font-semibold block"
+                      :class="dev.mode === 4 ? 'text-amber-400' : 'text-slate-400'"
+                      x-text="dev.mode === 4 ? 'Manual Target' : 'Target'"></span>
+                <span class="text-[9px] px-1 py-0.2 rounded font-mono"
+                      :class="dev.mode === 4 ? 'bg-amber-500/20 text-amber-300' : 'bg-teal-500/20 text-teal-300'"
+                      x-text="dev.mode === 4 ? 'MANUAL' : 'LOCKED'"></span>
+              </div>
+
+              <!-- When in Manual Mode: Interactive Target Adjustment -->
+              <template x-if="dev.mode === 4">
+                <div class="flex items-center justify-center space-x-1 mt-1">
+                  <button 
+                    type="button"
+                    @click.stop="stepTargetTemp(dev, -0.5)"
+                    class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-xs active:scale-95 transition"
+                    title="Lower target by 0.5°C">
+                    -
+                  </button>
+                  <input 
+                    type="number" 
+                    step="0.5" 
+                    min="5" 
+                    max="35"
+                    :value="dev.target_temp"
+                    @change.stop="inputTargetTemp(dev, $event.target.value)"
+                    @click.stop
+                    class="w-14 text-center font-bold text-base bg-slate-900 border border-amber-500/40 rounded text-amber-300 focus:outline-none focus:border-amber-400 py-0.5 font-mono cursor-pointer"
+                    title="Type or click to change manual target temperature">
+                  <button 
+                    type="button"
+                    @click.stop="stepTargetTemp(dev, +0.5)"
+                    class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-xs active:scale-95 transition"
+                    title="Raise target by 0.5°C">
+                    +
+                  </button>
+                </div>
+              </template>
+
+              <!-- When in Schedule Mode: Locked to Schedule with hint to switch -->
+              <template x-if="dev.mode !== 4">
+                <div 
+                  @click.stop="promptSwitchToManual(dev)"
+                  class="cursor-pointer group flex flex-col items-center justify-center mt-0.5"
+                  title="Target is set by schedule. Click to switch to Manual mode">
+                  <span class="text-lg font-bold text-teal-400 flex items-center gap-1 group-hover:text-teal-300">
+                    <span x-text="dev.target_temp !== null ? dev.target_temp + '°C' : '--'"></span>
+                    <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                  </span>
+                  <span class="text-[9px] text-slate-500 group-hover:text-amber-400 transition">Click for Manual</span>
+                </div>
+              </template>
+
+            </div>
+
+            <!-- Heating Status -->
+            <div class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/50 flex flex-col justify-center items-center">
+              <span class="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Heating</span>
+              <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 mt-0.5 rounded-full"
+                    :class="dev.is_heating ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-slate-800 text-slate-400'">
+                <span x-show="dev.is_heating" class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                <span x-text="dev.is_heating ? 'ACTIVE' : 'IDLE'"></span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Active Selection indicator -->
+          <div x-show="selectedUuid === dev.uuid" class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-400"></div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Multi-Thermostat Clone Banner -->
+    <template x-if="otherDevice">
+      <div class="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700/80 p-4 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3 text-sm">
+          <div class="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+            </svg>
+          </div>
+          <div>
+            <span class="font-bold text-white">Bulk Thermostat Sync:</span>
+            <span class="text-slate-300">
+              Clone current week schedule from <strong class="text-teal-400" x-text="selectedDevice.name"></strong> to <strong class="text-emerald-400" x-text="otherDevice.name"></strong>.
+            </span>
+          </div>
+        </div>
+        <button 
+          @click="confirmCloneToOther()"
+          :disabled="isSaving"
+          class="shrink-0 px-4 py-2 text-xs font-semibold rounded-xl bg-teal-600 hover:bg-teal-500 text-white shadow-md shadow-teal-600/20 transition flex items-center gap-2 disabled:opacity-50">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+          <span>Clone to <span x-text="otherDevice.name"></span></span>
+        </button>
+      </div>
+    </template>
+
+    <!-- Schedule Editor Section -->
+    <div x-show="selectedDevice" class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur space-y-6">
+      
+      <!-- Section Header & Legend -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <span>Schedule Editor</span>
+            <span class="text-xs font-normal text-slate-400" x-text="'(' + (selectedDevice ? selectedDevice.name : '') + ')'"></span>
+            <template x-if="hasUnsavedChanges">
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                Unsaved Changes
+              </span>
+            </template>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">Click + / - to adjust temperatures, split slots, or copy daily patterns in one click.</p>
+        </div>
+        
+        <div class="flex items-center gap-4 text-xs text-slate-400">
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-blue-600/70"></span>
+            <span>&lt; 18°C (Eco)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-emerald-600/70"></span>
+            <span>18 - 20°C (Comfort)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-amber-600/70"></span>
+            <span>&gt; 20°C (Heating)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div x-show="loadingSchedule" class="py-16 flex flex-col items-center justify-center space-y-3">
+        <svg class="w-8 h-8 text-teal-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <p class="text-sm text-slate-400">Fetching live schedule from thermostat over MQTT...</p>
+      </div>
+
+      <!-- 7 Days Grid with Editor & Bulk Actions -->
+      <div x-show="!loadingSchedule && currentSchedule" class="space-y-6">
+        <template x-for="dayKey in daysOfWeek" :key="dayKey">
+          <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 transition hover:border-slate-700/80 space-y-3">
+            
+            <!-- Day Top Bar & Bulk Copy Actions -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="flex items-center gap-3">
+                <span class="text-sm font-bold uppercase tracking-wider text-teal-400 w-28" x-text="dayLabels[dayKey]"></span>
+                <span class="text-xs text-slate-500 font-mono" x-text="(currentSchedule[dayKey] ? currentSchedule[dayKey].length : 0) + ' / 8 slots'"></span>
+              </div>
+
+              <!-- Day Quick Copy Buttons -->
+              <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <button 
+                  @click="copyDayToAll(dayKey)"
+                  class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
+                  title="Copy this day's schedule to all other 6 days">
+                  Copy to All Days
+                </button>
+                <template x-if="dayKey === 'mon'">
+                  <button 
+                    @click="copyDayToWeekdays(dayKey)"
+                    class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 transition"
+                    title="Copy Monday to Tue, Wed, Thu, Fri">
+                    Copy to Weekdays (Tue-Fri)
+                  </button>
+                </template>
+                <template x-if="dayKey === 'sat'">
+                  <button 
+                    @click="copyDayToWeekend(dayKey)"
+                    class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 transition"
+                    title="Copy Saturday to Sunday">
+                    Copy to Sunday
+                  </button>
+                </template>
+                <template x-if="(currentSchedule[dayKey] || []).length < 8">
+                  <button 
+                    @click="splitLongestSlot(dayKey)"
+                    class="px-2 py-1 rounded-md bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-800/80 transition flex items-center gap-1"
+                    title="Split the longest slot into two intervals">
+                    <span>+ Add Slot</span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Visual 24h Timeline Bar -->
+            <div class="h-6 w-full bg-slate-900 rounded-lg overflow-hidden flex border border-slate-800 shadow-inner">
+              <template x-for="(slot, sIndex) in (currentSchedule[dayKey] || [])" :key="sIndex">
+                <div 
+                  class="h-full relative group transition-all flex items-center justify-center text-[11px] font-semibold text-white px-1 select-none border-r border-slate-950/40 last:border-r-0"
+                  :style="'width: ' + ((slotDuration(slot) / 1440) * 100) + '%;'"
+                  :class="getTempBadgeClass(slot.temp)">
+                  
+                  <span class="truncate" x-text="slot.temp + '°'"></span>
+
+                  <!-- Hover Tooltip -->
+                  <div class="absolute bottom-full mb-1 hidden group-hover:flex flex-col items-center z-20 pointer-events-none">
+                    <div class="bg-slate-800 text-slate-100 text-[10px] font-mono px-2 py-1 rounded shadow-xl border border-slate-700 whitespace-nowrap">
+                      <span x-text="slot.start_time + ' - ' + slot.end_time + ' (' + slotDuration(slot) + 'm): ' + slot.temp + '°C'"></span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- Editable Slot Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 pt-2">
+              <template x-for="(slot, sIndex) in (currentSchedule[dayKey] || [])" :key="sIndex">
+                <div class="rounded-xl p-3 bg-slate-900 border border-slate-800 flex flex-col justify-between space-y-2 relative group hover:border-slate-700">
+                  
+                  <!-- Time range header -->
+                  <div class="flex items-center justify-between text-xs font-mono text-slate-400">
+                    <div class="flex items-center gap-1 font-semibold text-slate-200">
+                      <span x-text="slot.start_time"></span>
+                      <span>&rarr;</span>
+                      <!-- If not last slot, editable boundary end time -->
+                      <template x-if="sIndex < currentSchedule[dayKey].length - 1">
+                        <select 
+                          @change="updateSlotBoundary(dayKey, sIndex, $event.target.value)"
+                          class="bg-slate-800 text-teal-400 font-bold px-1.5 py-0.5 rounded border border-slate-700 hover:border-teal-500 cursor-pointer focus:outline-none">
+                          <template x-for="timeOption in getValidBoundaryTimes(dayKey, sIndex)" :key="timeOption">
+                            <option :value="timeOption" :selected="timeOption === slot.end_time" x-text="timeOption"></option>
+                          </template>
+                        </select>
+                      </template>
+                      <template x-if="sIndex === currentSchedule[dayKey].length - 1">
+                        <span x-text="slot.end_time"></span>
+                      </template>
+                    </div>
+
+                    <!-- Merge/Delete slot button (if more than 1 slot) -->
+                    <template x-if="currentSchedule[dayKey].length > 1">
+                      <button 
+                        @click="mergeSlotWithNext(dayKey, sIndex)"
+                        class="text-slate-500 hover:text-red-400 transition"
+                        title="Delete slot (merges with neighbor)">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                      </button>
+                    </template>
+                  </div>
+
+                  <!-- Temperature Stepper Controls -->
+                  <div class="flex items-center justify-between pt-1">
+                    <div class="flex items-center space-x-1.5">
+                      <button 
+                        @click="adjustSlotTemp(dayKey, sIndex, -0.5)"
+                        class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-sm transition active:scale-95">
+                        -
+                      </button>
+                      <span class="text-base font-extrabold w-14 text-center font-mono" :class="getTempTextClass(slot.temp)" x-text="slot.temp.toFixed(1) + '°'"></span>
+                      <button 
+                        @click="adjustSlotTemp(dayKey, sIndex, +0.5)"
+                        class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-sm transition active:scale-95">
+                        +
+                      </button>
+                    </div>
+
+                    <span class="text-[11px] text-slate-500 font-mono" x-text="slotDuration(slot) + ' min'"></span>
+                  </div>
+
+                </div>
+              </template>
+            </div>
+
+          </div>
+        </template>
+      </div>
+
+    </div>
+
+    <!-- Raw JSON Inspector Drawer -->
+    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-lg" x-data="{ open: false }">
+      <button 
+        @click="open = !open" 
+        class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-800/50 transition">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+          </svg>
+          <span class="text-xs font-semibold text-slate-300">Raw JSON Payload Inspector (Debug &amp; Diagnostics)</span>
+        </div>
+        <span class="text-xs text-slate-500 font-mono flex items-center gap-1">
+          <span x-text="open ? 'Hide' : 'Show'"></span>
+          <svg class="w-3.5 h-3.5 transform transition" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </span>
+      </button>
+
+      <div x-show="open" class="p-6 border-t border-slate-800 bg-slate-950">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] text-slate-400 font-mono">Current working schedule JSON payload:</span>
+          <button 
+            @click="copyJson()" 
+            class="text-[11px] text-teal-400 hover:text-teal-300 font-medium">
+            Copy to clipboard
+          </button>
+        </div>
+        <pre class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs font-mono text-emerald-400 overflow-x-auto max-h-96" x-text="rawJsonString"></pre>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Sticky Bottom Save Bar (Visible when changes exist) -->
+  <div x-show="hasUnsavedChanges"
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 translate-y-8"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-200"
+       x-transition:leave-start="opacity-100 translate-y-0"
+       x-transition:leave-end="opacity-0 translate-y-8"
+       class="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 border-t border-teal-500/40 p-4 shadow-2xl backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="flex h-3 w-3 relative">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-3 w-3 bg-teal-500"></span>
+        </span>
+        <div>
+          <span class="text-sm font-bold text-white">You have unsaved schedule changes</span>
+          <span class="text-xs text-slate-400 block" x-text="'Target device: ' + (selectedDevice ? selectedDevice.name : '')"></span>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3 w-full sm:w-auto">
+        <button 
+          @click="discardChanges()"
+          :disabled="isSaving"
+          class="flex-1 sm:flex-none px-4 py-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+          Discard Changes
+        </button>
+        <button 
+          @click="saveScheduleToDevice()"
+          :disabled="isSaving"
+          class="flex-1 sm:flex-none px-6 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 shadow-lg shadow-teal-500/20 transition flex items-center justify-center gap-2 disabled:opacity-50">
+          <svg x-show="isSaving" class="w-4 h-4 animate-spin text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          <span x-text="isSaving ? 'Pushing to Thermostat...' : 'Save to Thermostat'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    function schedulerApp() {
+      return {
+        devices: [],
+        selectedUuid: null,
+        selectedDevice: null,
+        currentSchedule: null,
+        originalSchedule: null,
+        rawJsonString: '// Select a thermostat to inspect payload',
+        loading: false,
+        loadingSchedule: false,
+        isSaving: false,
+        toastMessage: '',
+        toastType: 'success',
+        daysOfWeek: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+        dayLabels: {
+          mon: 'Monday',
+          tue: 'Tuesday',
+          wed: 'Wednesday',
+          thu: 'Thursday',
+          fri: 'Friday',
+          sat: 'Saturday',
+          sun: 'Sunday'
+        },
+
+        get otherDevice() {
+          if (!this.selectedUuid || this.devices.length < 2) return null;
+          return this.devices.find(d => d.uuid !== this.selectedUuid) || null;
+        },
+
+        get hasUnsavedChanges() {
+          if (!this.currentSchedule || !this.originalSchedule) return false;
+          return JSON.stringify(this.currentSchedule) !== JSON.stringify(this.originalSchedule);
+        },
+
+        showToast(msg, type = 'success', duration = 4000) {
+          this.toastMessage = msg;
+          this.toastType = type;
+          if (duration > 0) {
+            setTimeout(() => {
+              if (this.toastMessage === msg) this.toastMessage = '';
+            }, duration);
+          }
+        },
+
+        async init() {
+          await this.fetchDevices();
+        },
+
+        async fetchDevices(keepSelection = false) {
+          this.loading = true;
+          try {
+            const res = await fetch('/api/devices');
+            if (!res.ok) throw new Error((await res.json()).detail || 'Failed to list devices');
+            this.devices = await res.json();
+            if (this.devices.length > 0) {
+              if (!keepSelection || !this.selectedUuid) {
+                this.selectDevice(this.devices[0].uuid);
+              } else {
+                this.selectedDevice = this.devices.find(d => d.uuid === this.selectedUuid) || this.devices[0];
+              }
+            }
+          } catch (e) {
+            this.showToast('Error connecting to Meross backend: ' + e.message, 'error');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async selectDevice(uuid) {
+          if (this.hasUnsavedChanges) {
+            if (!confirm('You have unsaved changes on this thermostat! Switching devices will discard them. Proceed?')) {
+              return;
+            }
+          }
+          this.selectedUuid = uuid;
+          this.selectedDevice = this.devices.find(d => d.uuid === uuid);
+          await this.fetchSchedule(uuid);
+        },
+
+        async fetchSchedule(uuid) {
+          this.loadingSchedule = true;
+          try {
+            const res = await fetch(`/api/devices/${uuid}/schedule`);
+            if (!res.ok) throw new Error((await res.json()).detail || 'Failed to fetch schedule');
+            const data = await res.json();
+            this.currentSchedule = JSON.parse(JSON.stringify(data.schedule));
+            this.originalSchedule = JSON.parse(JSON.stringify(data.schedule));
+            this.rawJsonString = JSON.stringify(data.raw_schedule || data.schedule, null, 2);
+          } catch (e) {
+            this.showToast('Failed to load schedule: ' + e.message, 'error');
+          } finally {
+            this.loadingSchedule = false;
+          }
+        },
+
+        discardChanges() {
+          if (this.originalSchedule) {
+            this.currentSchedule = JSON.parse(JSON.stringify(this.originalSchedule));
+            this.showToast('Schedule changes discarded.', 'success', 2500);
+          }
+        },
+
+        async saveScheduleToDevice() {
+          if (!this.selectedUuid || !this.currentSchedule) return;
+          this.isSaving = true;
+          try {
+            const res = await fetch(`/api/devices/${this.selectedUuid}/schedule`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.currentSchedule)
+            });
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.detail || 'Failed to save schedule');
+            }
+            const updated = await res.json();
+            this.currentSchedule = JSON.parse(JSON.stringify(updated.schedule));
+            this.originalSchedule = JSON.parse(JSON.stringify(updated.schedule));
+            this.rawJsonString = JSON.stringify(updated.raw_schedule || updated.schedule, null, 2);
+            this.showToast('Schedule successfully saved to ' + this.selectedDevice.name + '!', 'success', 5000);
+          } catch (e) {
+            this.showToast('Save failed: ' + e.message, 'error', 6000);
+          } finally {
+            this.isSaving = false;
+          }
+        },
+
+        async confirmCloneToOther() {
+          if (!this.selectedDevice || !this.otherDevice) return;
+          const msg = `Are you sure you want to clone the entire 7-day schedule from ${this.selectedDevice.name} to ${this.otherDevice.name}?\n\nThis will immediately overwrite the schedule on ${this.otherDevice.name}.`;
+          if (!confirm(msg)) return;
+
+          this.isSaving = true;
+          try {
+            const res = await fetch(`/api/devices/${this.selectedDevice.uuid}/clone-to/${this.otherDevice.uuid}`, {
+              method: 'POST'
+            });
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.detail || 'Clone failed');
+            }
+            this.showToast(`Successfully cloned schedule from ${this.selectedDevice.name} to ${this.otherDevice.name}!`, 'success', 5000);
+          } catch (e) {
+            this.showToast('Clone failed: ' + e.message, 'error', 6000);
+          } finally {
+            this.isSaving = false;
+          }
+        },
+
+        // Mode switching & Manual Target Control
+        isUpdatingMode: false,
+
+        async setDeviceMode(uuid, mode) {
+          const dev = this.devices.find(d => d.uuid === uuid);
+          const modeName = (mode === 3 ? 'Schedule (Auto)' : 'Manual');
+          this.isUpdatingMode = true;
+          try {
+            const res = await fetch(`/api/devices/${uuid}/mode`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ mode: mode })
+            });
+            if (!res.ok) throw new Error((await res.json()).detail || 'Failed to set mode');
+            const updated = await res.json();
+            if (dev) {
+              dev.mode = updated.mode;
+              dev.target_temp = updated.target_temp;
+              dev.is_heating = updated.is_heating;
+            }
+            this.showToast(`Switched ${dev ? dev.name : 'device'} to ${modeName} mode.`, 'success', 3000);
+            if (uuid === this.selectedUuid) {
+              await this.fetchSchedule(uuid);
+            }
+          } catch (e) {
+            this.showToast('Failed to change mode: ' + e.message, 'error', 5000);
+          } finally {
+            this.isUpdatingMode = false;
+          }
+        },
+
+        promptSwitchToManual(dev) {
+          if (confirm(`Target temperature is currently locked to the heating schedule on ${dev.name}.\n\nWould you like to switch to Manual mode to set a custom target temperature?`)) {
+            this.setDeviceMode(dev.uuid, 4);
+          }
+        },
+
+        async stepTargetTemp(dev, delta) {
+          if (dev.mode !== 4) return;
+          let current = dev.target_temp !== null ? dev.target_temp : 20.0;
+          let newTemp = Math.round((current + delta) * 10) / 10;
+          if (newTemp < 5.0) newTemp = 5.0;
+          if (newTemp > 35.0) newTemp = 35.0;
+          dev.target_temp = newTemp;
+          await this.sendTargetTemp(dev.uuid, newTemp);
+        },
+
+        async inputTargetTemp(dev, val) {
+          if (dev.mode !== 4) return;
+          let num = parseFloat(val);
+          if (isNaN(num)) return;
+          num = Math.round(num * 10) / 10;
+          if (num < 5.0) num = 5.0;
+          if (num > 35.0) num = 35.0;
+          dev.target_temp = num;
+          await this.sendTargetTemp(dev.uuid, num);
+        },
+
+        async sendTargetTemp(uuid, temp) {
+          const dev = this.devices.find(d => d.uuid === uuid);
+          try {
+            const res = await fetch(`/api/devices/${uuid}/target-temperature`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ target_temp: temp })
+            });
+            if (!res.ok) throw new Error((await res.json()).detail || 'Failed to update target temperature');
+            const updated = await res.json();
+            if (dev) {
+              dev.target_temp = updated.target_temp;
+              dev.is_heating = updated.is_heating;
+              dev.mode = updated.mode;
+            }
+            this.showToast(`Target temperature updated to ${temp}°C on ${dev ? dev.name : 'thermostat'}.`, 'success', 2500);
+          } catch (e) {
+            this.showToast('Failed to update target: ' + e.message, 'error', 5000);
+          }
+        },
+
+        // Temperature stepping
+        adjustSlotTemp(dayKey, slotIndex, delta) {
+          const slot = this.currentSchedule[dayKey][slotIndex];
+          let newTemp = Math.round((slot.temp + delta) * 10) / 10;
+          if (newTemp < 5.0) newTemp = 5.0;
+          if (newTemp > 35.0) newTemp = 35.0;
+          slot.temp = newTemp;
+          this.updateRawJsonPreview();
+        },
+
+        // Boundary adjustment
+        getValidBoundaryTimes(dayKey, slotIndex) {
+          const slots = this.currentSchedule[dayKey];
+          const prevStartM = this.timeToMinutes(slots[slotIndex].start_time);
+          const nextEndM = this.timeToMinutes(slots[slotIndex + 1].end_time);
+
+          const options = [];
+          // Stepping in 15 minute increments
+          for (let m = prevStartM + 15; m <= nextEndM - 15; m += 15) {
+            options.push(this.minutesToTime(m));
+          }
+          return options;
+        },
+
+        updateSlotBoundary(dayKey, slotIndex, newEndTime) {
+          const slots = this.currentSchedule[dayKey];
+          slots[slotIndex].end_time = newEndTime;
+          slots[slotIndex + 1].start_time = newEndTime;
+          this.updateRawJsonPreview();
+        },
+
+        // Slot splitting
+        splitLongestSlot(dayKey) {
+          const slots = this.currentSchedule[dayKey];
+          if (slots.length >= 8) return;
+
+          // Find slot with longest duration
+          let longestIdx = 0;
+          let maxDur = 0;
+          slots.forEach((s, i) => {
+            const dur = this.slotDuration(s);
+            if (dur > maxDur) {
+              maxDur = dur;
+              longestIdx = i;
+            }
+          });
+
+          if (maxDur < 30) {
+            alert('Slots are too short to split further (minimum 15m each).');
+            return;
+          }
+
+          const target = slots[longestIdx];
+          const startM = this.timeToMinutes(target.start_time);
+          const dur = this.slotDuration(target);
+          // Midpoint rounded to nearest 15 mins
+          const halfM = Math.round((dur / 2) / 15) * 15;
+          const midM = startM + halfM;
+          const midTime = this.minutesToTime(midM);
+
+          const oldEnd = target.end_time;
+          target.end_time = midTime;
+
+          const newSlot = {
+            start_time: midTime,
+            end_time: oldEnd,
+            temp: target.temp
+          };
+
+          slots.splice(longestIdx + 1, 0, newSlot);
+          this.updateRawJsonPreview();
+        },
+
+        // Merge slot with neighbor
+        mergeSlotWithNext(dayKey, slotIndex) {
+          const slots = this.currentSchedule[dayKey];
+          if (slots.length <= 1) return;
+
+          if (slotIndex < slots.length - 1) {
+            // Merge with next slot: expand current slot to next slot's end time and remove next
+            slots[slotIndex].end_time = slots[slotIndex + 1].end_time;
+            slots.splice(slotIndex + 1, 1);
+          } else {
+            // Last slot: expand previous slot to 24:00 and remove last
+            slots[slotIndex - 1].end_time = '24:00';
+            slots.splice(slotIndex, 1);
+          }
+          this.updateRawJsonPreview();
+        },
+
+        // Bulk Copy helpers
+        copyDayToAll(sourceDayKey) {
+          const src = JSON.stringify(this.currentSchedule[sourceDayKey]);
+          this.daysOfWeek.forEach(day => {
+            if (day !== sourceDayKey) {
+              this.currentSchedule[day] = JSON.parse(src);
+            }
+          });
+          this.updateRawJsonPreview();
+          this.showToast(`Copied ${this.dayLabels[sourceDayKey]} schedule to ALL days.`, 'success', 3000);
+        },
+
+        copyDayToWeekdays(sourceDayKey) {
+          const src = JSON.stringify(this.currentSchedule[sourceDayKey]);
+          ['tue', 'wed', 'thu', 'fri'].forEach(day => {
+            this.currentSchedule[day] = JSON.parse(src);
+          });
+          this.updateRawJsonPreview();
+          this.showToast(`Copied Monday schedule to Tue, Wed, Thu, Fri.`, 'success', 3000);
+        },
+
+        copyDayToWeekend(sourceDayKey) {
+          const src = JSON.stringify(this.currentSchedule[sourceDayKey]);
+          this.currentSchedule['sun'] = JSON.parse(src);
+          this.updateRawJsonPreview();
+          this.showToast(`Copied Saturday schedule to Sunday.`, 'success', 3000);
+        },
+
+        updateRawJsonPreview() {
+          this.rawJsonString = JSON.stringify(this.currentSchedule, null, 2);
+        },
+
+        // Time calculations
+        timeToMinutes(timeStr) {
+          const [h, m] = timeStr.split(':').map(Number);
+          return h * 60 + m;
+        },
+
+        minutesToTime(mins) {
+          const h = Math.floor(mins / 60);
+          const m = mins % 60;
+          return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        },
+
+        slotDuration(slot) {
+          return this.timeToMinutes(slot.end_time) - this.timeToMinutes(slot.start_time);
+        },
+
+        getTempBadgeClass(temp) {
+          if (temp < 18.0) return 'bg-blue-600/80 hover:bg-blue-500';
+          if (temp <= 20.0) return 'bg-emerald-600/80 hover:bg-emerald-500';
+          return 'bg-amber-600/80 hover:bg-amber-500';
+        },
+
+        getTempTextClass(temp) {
+          if (temp < 18.0) return 'text-blue-400';
+          if (temp <= 20.0) return 'text-emerald-400';
+          return 'text-amber-400';
+        },
+
+        copyJson() {
+          navigator.clipboard.writeText(this.rawJsonString);
+          this.showToast('JSON copied to clipboard!', 'success', 2000);
+        }
+      }
+    }
+  </script>
+</body>
+</html>

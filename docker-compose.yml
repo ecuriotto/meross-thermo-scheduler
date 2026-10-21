@@ -1,0 +1,9 @@
+services:
+  meross-scheduler:
+    build: .
+    container_name: meross-scheduler
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env

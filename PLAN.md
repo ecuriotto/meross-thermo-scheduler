@@ -50,4 +50,4 @@
   - Bulk copy buttons: "Copy to All Days", "Copy to Weekdays (Tue-Fri)", "Copy Saturday to Sunday".
   - Bulk Thermostat Sync: One-click cloning from one thermostat to the other with confirmation.
   - Sticky Unsaved Changes bar with Discard and "Save to Thermostat" action.
-- [ ] **STOP & VERIFY:** Verify interactive schedule editing, day-to-day bulk copy, and thermostat-to-thermostat sync in the web UI.
+- [x] **STOP & VERIFY:** Verify interactive schedule editing, day-to-day bulk copy, and thermostat-to-thermostat sync in the web UI.

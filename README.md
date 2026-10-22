@@ -57,8 +57,8 @@ graph TD
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/110-meross.git
-cd 110-meross
+git clone https://github.com/ecuriotto/meross-thermo-scheduler.git
+cd meross-thermo-scheduler
 
 # Create and activate virtual environment
 python3 -m venv .venv
